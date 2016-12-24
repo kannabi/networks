@@ -67,83 +67,14 @@ public class PortForwarder {
             return;
         }
 
-        try {
-            SocketChannel fromChannel = (SocketChannel) key.channel();
-            ForwarderInfo fromInfo = (ForwarderInfo) key.attachment();
-            SelectionKey toKey = fromInfo.getKey();
-            ForwarderInfo toInfo = (ForwarderInfo) toKey.attachment();
-            SocketChannel toChannel = (SocketChannel) toKey.channel();
-            ByteBuffer readBuffer = fromInfo.getBuffer();
-            ByteBuffer writeBuffer = toInfo.getBuffer();
+        if (key.isConnectable())
+            completeConnection(key);
 
-            if (key.isConnectable()) {
-                try {
-                    fromChannel.finishConnect();
-                    System.out.println("connect " + ((InetSocketAddress) fromChannel.getLocalAddress()).getPort() + " ");
-                    key.interestOps((key.interestOps() & ~SelectionKey.OP_CONNECT) | SelectionKey.OP_READ);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                    fromChannel.close();
-                    toChannel.close();
-                    key.cancel();
-                    toKey.cancel();
-                }
-            }
+        if (key.isWritable())
+            writeData(key);
 
-            if (key.isWritable()) {
-                try {
-                    writeBuffer.flip();
-                    int written = fromChannel.write(writeBuffer);
-                    System.out.println("write " + ((InetSocketAddress) fromChannel.getLocalAddress()).getPort() + " " + written);
-                    writeBuffer.compact();
-                    if (writeBuffer.position() == 0) {
-                        key.interestOps(key.interestOps() & ~SelectionKey.OP_WRITE);
-                        if (toInfo.isInputShut()) {
-                            fromChannel.shutdownOutput();
-                            fromInfo.setOutputShutted();
-                        }
-                    }
-                } catch (IOException ie) {
-                    key.interestOps(key.interestOps() & ~SelectionKey.OP_WRITE);
-                    fromChannel.shutdownOutput();
-                    fromInfo.setOutputShutted();
-                    toChannel.shutdownInput();
-                    toInfo.setInputShutted();
-                }
-            }
-
-            if (key.isReadable()) {
-                try {
-                    int read = fromChannel.read(readBuffer);
-                    System.out.println("read " + ((InetSocketAddress) fromChannel.getLocalAddress()).getPort() + " " + read);
-                    if (read == -1) {
-                        key.interestOps(key.interestOps() & ~SelectionKey.OP_READ);
-                        fromChannel.shutdownInput();
-                        fromInfo.setInputShutted();
-
-                        if (readBuffer.position() == 0) {
-                            toChannel.shutdownOutput();
-                            toInfo.setOutputShutted();
-                        }
-                    } else if ((read > 0) || (readBuffer.position() > 0)) {
-                        toKey.interestOps(toKey.interestOps() | SelectionKey.OP_WRITE);
-                    }
-                } catch (IOException ie) {
-                    fromChannel.shutdownInput();
-                    fromInfo.setInputShutted();
-                    fromChannel.shutdownOutput();
-                    fromInfo.setOutputShutted();
-                }
-            }
-
-            if (fromInfo.isShut() || toInfo.isShut()) {
-                fromChannel.close();
-                toChannel.close();
-                key.cancel();
-                toKey.cancel();
-            }
-        } catch (IOException e){
-            e.printStackTrace();
+        if (key.isReadable()) {
+            readData(key);
         }
     }
 
@@ -178,7 +109,108 @@ public class PortForwarder {
         }
     }
 
-    private static void logError(Exception exception) {
-        System.err.println("Error: " + exception);
+    private void completeConnection(SelectionKey key){
+        SocketChannel fromChannel = (SocketChannel) key.channel();
+        ForwarderInfo fromInfo = (ForwarderInfo) key.attachment();
+        SelectionKey toKey = fromInfo.getKey();
+        SocketChannel toChannel = (SocketChannel) toKey.channel();
+
+        try {
+            fromChannel.finishConnect();
+            System.out.println("connect " + ((InetSocketAddress) fromChannel.getLocalAddress()).getPort() + " ");
+            key.interestOps((key.interestOps() & ~SelectionKey.OP_CONNECT) | SelectionKey.OP_READ);
+        } catch (IOException e) {
+            e.printStackTrace();
+            try {
+                fromChannel.close();
+                toChannel.close();
+            } catch (IOException e_){
+                e.printStackTrace();
+            }
+            key.cancel();
+            toKey.cancel();
+        }
+    }
+
+    private void writeData(SelectionKey key){
+        SocketChannel fromChannel = (SocketChannel) key.channel();
+        ForwarderInfo fromInfo = (ForwarderInfo) key.attachment();
+        SelectionKey toKey = fromInfo.getKey();
+        ForwarderInfo toInfo = (ForwarderInfo) toKey.attachment();
+        SocketChannel toChannel = (SocketChannel) toKey.channel();
+        ByteBuffer writeBuffer = toInfo.getBuffer();
+
+        try {
+            writeBuffer.flip();
+            int written = fromChannel.write(writeBuffer);
+            System.out.println("write " + ((InetSocketAddress) fromChannel.getLocalAddress()).getPort() + " " + written);
+            writeBuffer.compact();
+            if (writeBuffer.position() == 0) {
+                key.interestOps(key.interestOps() & ~SelectionKey.OP_WRITE);
+                if (toInfo.isInputShut()) {
+                    fromChannel.shutdownOutput();
+                    fromInfo.setOutputShutted();
+                }
+            }
+
+            if (fromInfo.isShut() || toInfo.isShut()) {
+                fromChannel.close();
+                toChannel.close();
+                key.cancel();
+                toKey.cancel();
+            }
+        } catch (IOException ie) {
+            key.interestOps(key.interestOps() & ~SelectionKey.OP_WRITE);
+            fromInfo.setOutputShutted();
+            try {
+                fromChannel.shutdownOutput();
+                toChannel.shutdownInput();
+            } catch (IOException e_){
+                e_.printStackTrace();
+            }
+            toInfo.setInputShutted();
+        }
+    }
+
+    private void readData(SelectionKey key){
+        SocketChannel fromChannel = (SocketChannel) key.channel();
+        ForwarderInfo fromInfo = (ForwarderInfo) key.attachment();
+        SelectionKey toKey = fromInfo.getKey();
+        ForwarderInfo toInfo = (ForwarderInfo) toKey.attachment();
+        SocketChannel toChannel = (SocketChannel) toKey.channel();
+        ByteBuffer readBuffer = fromInfo.getBuffer();
+
+        try {
+            int read = fromChannel.read(readBuffer);
+            System.out.println("read " + ((InetSocketAddress) fromChannel.getLocalAddress()).getPort() + " " + read);
+            if (read == -1) {
+                key.interestOps(key.interestOps() & ~SelectionKey.OP_READ);
+                fromChannel.shutdownInput();
+                fromInfo.setInputShutted();
+
+                if (readBuffer.position() == 0) {
+                    toChannel.shutdownOutput();
+                    toInfo.setOutputShutted();
+                }
+            } else if ((read > 0) || (readBuffer.position() > 0)) {
+                toKey.interestOps(toKey.interestOps() | SelectionKey.OP_WRITE);
+            }
+
+            if (fromInfo.isShut() || toInfo.isShut()) {
+                fromChannel.close();
+                toChannel.close();
+                key.cancel();
+                toKey.cancel();
+            }
+        } catch (IOException ie) {
+            fromInfo.setInputShutted();
+            try {
+                fromChannel.shutdownInput();
+                fromChannel.shutdownOutput();
+            } catch (IOException e_){
+                e_.printStackTrace();
+            }
+            fromInfo.setOutputShutted();
+        }
     }
 }
