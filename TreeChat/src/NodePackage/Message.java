@@ -1,5 +1,6 @@
 package NodePackage;
 
+import java.nio.channels.SelectionKey;
 import java.util.Set;
 import java.util.TreeSet;
 
@@ -8,11 +9,18 @@ import java.util.TreeSet;
  */
 public class Message {
     private String body;
+    private String uuid;
     private Set<String> addr;
 
     Message(String body, Set<String> addr){
         this.body = body;
         this.addr = copySet(addr);
+    }
+
+    Message(String body, Set<String> addr, String uuid){
+        this.body = body;
+        this.addr = copySet(addr);
+        this.uuid = uuid;
     }
 
     public String getBody(){
@@ -21,6 +29,18 @@ public class Message {
 
     public Set<String> getAddr(){
         return addr;
+    }
+
+    public String getUuid(){
+        return uuid;
+    }
+
+    public boolean removeAddr(String address){
+        return addr.remove(address);
+    }
+
+    public boolean isAddrEmpty(){
+        return addr.isEmpty();
     }
 
     private Set<String> copySet (Set<String> from){

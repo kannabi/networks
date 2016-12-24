@@ -3,7 +3,7 @@ package ConstPackage;
 public abstract class Const {
     public static final int DATAGRAMM_SIZE = 1024;
     public static final int WAIT_TIME = 1000;
-    public static final int PERCENT = 0;
+    public static final int PERCENT = 50;
 
     public static final int ID_LENGTH = 36;
     public static final int TYPE_LENGTH = 3;

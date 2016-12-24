@@ -62,8 +62,8 @@ public class Node extends Thread {
         log.info("Start leaf");
 
         this.selfPort = Integer.parseInt(selfPort);
-        this.percentOfLost = Integer.parseInt(percentOfLost);
-//        this.percentOfLost = Const.PERCENT;
+//        this.percentOfLost = Integer.parseInt(percentOfLost);
+        this.percentOfLost = Const.PERCENT;
         this.grandpa = false;
         this.ancPort = Integer.parseInt(ancPort);
         this.ancIP = ancIP;
@@ -81,8 +81,8 @@ public class Node extends Thread {
     public Node (String percentOfLost, String selfPort){
         log.info("Start root");
         grandpa = true;
-        this.percentOfLost = Integer.parseInt(percentOfLost);
-//        this.percentOfLost = Const.PERCENT;
+//        this.percentOfLost = Integer.parseInt(percentOfLost);
+        this.percentOfLost = Const.PERCENT;
         this.selfPort = Integer.parseInt(selfPort);
         this.ancUuid = uuid.toString();
 
@@ -175,8 +175,7 @@ public class Node extends Thread {
         return message.substring(Const.ID_LENGTH + Const.TYPE_LENGTH, Const.ID_LENGTH * 2 + Const.TYPE_LENGTH);
     }
 
-    //Осуществляется пять попыток подключиться к узлу
-    //Если узел так и не ответил, программа завершается
+
     private void connectParent(String ancIP, int ancPort) throws ConnectionException {
         try{
             log.info("Try to connect to parent");
@@ -370,6 +369,7 @@ public class Node extends Thread {
                 while (exit) {
                     try {
                         listeningSocket.receive(recPacket);
+                        System.out.println(getMessageFromPacket(recPacket));
                         if (random.nextInt(100) > percentOfLost)
                             processPacket(recPacket);
                     } catch (SocketTimeoutException e) {
@@ -400,6 +400,7 @@ public class Node extends Thread {
                 byte[] buf = message.getBytes();
 
                 for (String str : uuids){
+                    System.out.println(message + " to " + connectionMap.get(str).getPort());
                     resPack = new DatagramPacket(buf, buf.length, connectionMap.get(str).getAddr(), connectionMap.get(str).getPort());
                     listeningSocket.send(resPack);
                 }
