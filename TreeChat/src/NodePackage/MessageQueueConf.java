@@ -19,22 +19,6 @@ public class MessageQueueConf {
     //second arg of nested table -- number of try. How many times we have tried send message to it.
     private Vector<Message> messages = new Vector<>();
 
-//    private Hashtable<String, Hashtable<String, Integer>> queue = new Hashtable<>();
-//    private Hashtable<String, String> messages = new Hashtable<>();
-
-//    private synchronized boolean checkRotten(String id){
-//        for (String it : queue.get(id).keySet())
-//            if(queue.get(id).get(it) > Const.MAX_NUM_OF_TRY)
-//                return true;
-//        return false;
-//    }
-//
-//    private synchronized void new37(){
-//        for (String it : queue.keySet())
-//            if(checkRotten(it))
-//                deleteMessage(it);
-//    }
-
     public synchronized void addMessage(String messageUuid, Set<String> addresses, String message){
         if(addresses.isEmpty())
             return;
@@ -67,14 +51,6 @@ public class MessageQueueConf {
 
         return messages.get(findMessage(message)).getAddr();
     }
-
-//    public synchronized int getNumOfTry(String message, String addr){
-//        return queue.get(message).get(addr);
-//    }
-
-//    public synchronized Set<String> getMessagesID(){
-//        return queue.keySet();
-//    }
 
     public synchronized String getMessage(String ID){
         return messages.get(findMessage(ID)).getBody();

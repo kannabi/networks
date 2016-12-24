@@ -15,34 +15,17 @@ public class MessageQueue {
     }
 
     public synchronized void put(Message message){
-        while (valueSet)
-            try{
-                wait();
-            } catch (InterruptedException e){
-                e.printStackTrace();
-            }
         if(message.getAddr().isEmpty()) {
             return;
         }
 
         queue.add(message);
-        valueSet = true;
-        notify();
     }
 
     public synchronized Message get(){
-        while(!valueSet)
-            try {
-                wait();
-            } catch (InterruptedException e){
-                e.printStackTrace();
-            }
-
-//        System.out.println("get");
         Message mes = queue.lastElement();
         queue.remove(queue.size() - 1);
-        valueSet = false;
-        notify();
+
         return mes;
     }
 

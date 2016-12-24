@@ -62,8 +62,8 @@ public class Node extends Thread {
         log.info("Start leaf");
 
         this.selfPort = Integer.parseInt(selfPort);
-//        this.percentOfLost = Integer.parseInt(percentOfLost);
-        this.percentOfLost = Const.PERCENT;
+        this.percentOfLost = Integer.parseInt(percentOfLost);
+//        this.percentOfLost = Const.PERCENT;
         this.grandpa = false;
         this.ancPort = Integer.parseInt(ancPort);
         this.ancIP = ancIP;
@@ -81,8 +81,8 @@ public class Node extends Thread {
     public Node (String percentOfLost, String selfPort){
         log.info("Start root");
         grandpa = true;
-//        this.percentOfLost = Integer.parseInt(percentOfLost);
-        this.percentOfLost = Const.PERCENT;
+        this.percentOfLost = Integer.parseInt(percentOfLost);
+//        this.percentOfLost = Const.PERCENT;
         this.selfPort = Integer.parseInt(selfPort);
         this.ancUuid = uuid.toString();
 
@@ -236,18 +236,21 @@ public class Node extends Thread {
                 Message ansMessage;
                 String message = getMessageFromPacket(packet);
 
-                if(inputMessageCash.contain(getMessageUuid(message)))
-                    return;
-                else
-                    inputMessageCash.add(getMessageUuid(message));
-                System.out.println(getUuid(message) + ": " + getMessageBody(message));
-
                 String messageUuid = UUID.randomUUID().toString();
                 String ans = uuid.toString() + Const.MES + messageUuid + getMessageBody(message);
                 String confAns = uuid.toString() + Const.CONF + getMessageUuid(message);
                 byte[] buf = confAns.getBytes();
 
                 DatagramPacket confPack = new DatagramPacket(buf, buf.length, packet.getAddress(), packet.getPort());
+
+                if(inputMessageCash.contain(getMessageUuid(message))) {
+                    listeningSocket.send(confPack);
+                    return;
+                } else
+                    inputMessageCash.add(getMessageUuid(message));
+
+                System.out.println(getUuid(message) + ": " + getMessageBody(message));
+
                 listeningSocket.send(confPack);
 
                 Set<String> addr = copySet(connectionMap.keySet());
@@ -388,9 +391,16 @@ public class Node extends Thread {
 
         @Override
         public void run(){
-            while (messageQueue.isEmpty()){
-                message = messageQueue.get();
-                sendToContacts(message.getAddr(), message.getBody());
+            while (true){
+                if(!messageQueue.isEmpty()) {
+                    message = messageQueue.get();
+                    sendToContacts(message.getAddr(), message.getBody());
+                    try {
+                        Thread.sleep(Const.WAIT_TIME);
+                    } catch (InterruptedException e){
+                        e.printStackTrace();
+                    }
+                }
             }
         }
 
