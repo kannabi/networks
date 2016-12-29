@@ -3,6 +3,7 @@ package NodePackage;
 import java.io.IOException;
 import java.net.*;
 import java.util.*;
+import java.util.concurrent.LinkedBlockingDeque;
 import java.util.logging.Logger;
 
 import ConstPackage.Const;
@@ -47,7 +48,8 @@ public class Node extends Thread {
     //набор сообщений, который были отправлены, но чья доставка еще не подтверждена
     private volatile MessageQueueConf unconfMessage = new MessageQueueConf();
     //набор сообщений, которые необходимо отправить
-    private volatile MessageQueue messageQueue = new MessageQueue();
+//    private volatile MessageQueue messageQueue = new MessageQueue();
+    private volatile LinkedBlockingDeque<Message> messageQueue = new LinkedBlockingDeque<>();
     //кеш сообщений, в который записываются уникальные идентификаторы всех пришедших сообщений.
     InputMessageCash inputMessageCash = new InputMessageCash();
 
@@ -94,25 +96,23 @@ public class Node extends Thread {
         Resender resender;
         System.out.println("Shutdown hook ran!");
         String message;
-        if (grandpa) {
-            Set<String> uuids = connectionMap.keySet();
-            Iterator<String> iterator = uuids.iterator();
-            Connection futureRoot = connectionMap.get(iterator.next());
-            message = uuid.toString() + Const.SER + Const.SEP + futureRoot.getAddr() + Const.SEP + Integer.toString(futureRoot.getPort());
-            messageQueue.put(new Message(message, uuids));
-        } else {
-            message = uuid.toString() + Const.SER + Const.SEP + ancIP + Const.SEP + Integer.toString(ancPort);
-            messageQueue.put(new Message(message, connectionMap.keySet()));
-        }
+        try {
+            if (grandpa) {
+                Set<String> uuids = connectionMap.keySet();
+                Iterator<String> iterator = uuids.iterator();
+                Connection futureRoot = connectionMap.get(iterator.next());
+                message = uuid.toString() + Const.SER + Const.SEP + futureRoot.getAddr() + Const.SEP + Integer.toString(futureRoot.getPort());
+                messageQueue.put(new Message(message, uuids));
+            } else {
+                message = uuid.toString() + Const.SER + Const.SEP + ancIP + Const.SEP + Integer.toString(ancPort);
+                messageQueue.put(new Message(message, connectionMap.keySet()));
+            }
 
         unconfMessage.addMessage(uuid.toString(), copySet(connectionMap.keySet()), message);
-
-        try {
-            Thread.sleep(3000);
+        listeningSocket.close();
         } catch (InterruptedException e){
             e.printStackTrace();
         }
-        listeningSocket.close();
     }
 
     //Основная функция нити, которая читает сообщения из терминала и кладет в очерель для отправки.
@@ -139,7 +139,11 @@ public class Node extends Thread {
             ID = UUID.randomUUID().toString();
             message = uuid.toString() + Const.MES + ID + text;
             mesPack = new Message(message, connectionMap.keySet());
-            messageQueue.put(mesPack);
+            try {
+                messageQueue.put(mesPack);
+            } catch (InterruptedException e){
+                e.printStackTrace();
+            }
             unconfMessage.addMessage(ID, copySet(connectionMap.keySet()), message);
         }
     }
@@ -244,6 +248,7 @@ public class Node extends Thread {
                 DatagramPacket confPack = new DatagramPacket(buf, buf.length, packet.getAddress(), packet.getPort());
 
                 if(inputMessageCash.contain(getMessageUuid(message))) {
+                    System.out.println("send confirmation");
                     listeningSocket.send(confPack);
                     return;
                 } else
@@ -259,6 +264,8 @@ public class Node extends Thread {
                 messageQueue.put(ansMessage);
                 unconfMessage.addMessage(messageUuid, addr, ans);
             } catch (IOException e){
+                e.printStackTrace();
+            } catch (InterruptedException e){
                 e.printStackTrace();
             }
         }
@@ -391,16 +398,13 @@ public class Node extends Thread {
 
         @Override
         public void run(){
-            while (true){
-                if(!messageQueue.isEmpty()) {
-                    message = messageQueue.get();
+            try {
+                while (true){
+                    message = messageQueue.take();
                     sendToContacts(message.getAddr(), message.getBody());
-                    try {
-                        Thread.sleep(Const.WAIT_TIME);
-                    } catch (InterruptedException e){
-                        e.printStackTrace();
-                    }
                 }
+            } catch (InterruptedException e){
+                e.printStackTrace();
             }
         }
 
@@ -433,7 +437,11 @@ public class Node extends Thread {
 
             for (String it : messageIDs){
                 resMessge = new Message(unconfMessage.getMessage(it), unconfMessage.getUnconfirmedAddresses(it));
-                messageQueue.put(resMessge);
+                try {
+                    messageQueue.put(resMessge);
+                } catch (InterruptedException e){
+                    e.printStackTrace();
+                }
             }
         }
 
