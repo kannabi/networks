@@ -48,7 +48,6 @@ public class Node extends Thread {
     //набор сообщений, который были отправлены, но чья доставка еще не подтверждена
     private volatile MessageQueueConf unconfMessage = new MessageQueueConf();
     //набор сообщений, которые необходимо отправить
-//    private volatile MessageQueue messageQueue = new MessageQueue();
     private volatile LinkedBlockingDeque<Message> messageQueue = new LinkedBlockingDeque<>();
     //кеш сообщений, в который записываются уникальные идентификаторы всех пришедших сообщений.
     InputMessageCash inputMessageCash = new InputMessageCash();
@@ -72,11 +71,13 @@ public class Node extends Thread {
         initSocket();
 
         try{
-            connectParent(ancIP, Integer.parseInt(ancPort));
-            working();
+            connectParent();
         } catch (ConnectionException e){
             e.printStackTrace();
+            return;
         }
+
+        working();
     }
 
     //Конструткор для корня
@@ -92,8 +93,7 @@ public class Node extends Thread {
         working();
     }
 
-    private void sayGoodBye(){
-        Resender resender;
+    private void sayGoodBye(Thread listener){
         System.out.println("Shutdown hook ran!");
         String message;
         try {
@@ -108,8 +108,11 @@ public class Node extends Thread {
                 messageQueue.put(new Message(message, connectionMap.keySet()));
             }
 
-        unconfMessage.addMessage(uuid.toString(), copySet(connectionMap.keySet()), message);
-        listeningSocket.close();
+            unconfMessage.addMessage(uuid.toString(), copySet(connectionMap.keySet()), message);
+
+            listener.join();
+
+            listeningSocket.close();
         } catch (InterruptedException e){
             e.printStackTrace();
         }
@@ -131,7 +134,7 @@ public class Node extends Thread {
         Message mesPack;
 
         Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            sayGoodBye();
+            sayGoodBye(listeningThread);
         }));
 
         while (true) {
@@ -180,7 +183,7 @@ public class Node extends Thread {
     }
 
 
-    private void connectParent(String ancIP, int ancPort) throws ConnectionException {
+    private void connectParent() throws ConnectionException {
         try{
             log.info("Try to connect to parent");
             int i;
@@ -202,7 +205,11 @@ public class Node extends Thread {
                     listeningSocket.send(packet);
                     log.info("Hello packet has been sent");
                     listeningSocket.receive(recPacket);
-                    break;
+                    System.out.println(getMessageFromPacket(recPacket));
+                    if (recPacket.getPort() == ancPort && recPacket.getAddress().getHostAddress().equals(ancIP))
+                        break;
+                    else
+                        --i;
                 } catch (SocketTimeoutException e){
                     continue;
                 }
@@ -275,16 +282,22 @@ public class Node extends Thread {
                 String message = getMessageFromPacket(packet);
                 String fromUuid = getUuid(message);
 
-                if(inputMessageCash.contain(fromUuid))
+                byte[] buf = (uuid.toString() + Const.BYE + fromUuid).getBytes();
+                DatagramPacket confPack = new DatagramPacket(buf, buf.length, packet.getAddress(), packet.getPort());
+
+                if(inputMessageCash.contain(fromUuid)) {
+                    System.out.println("send confirmation");
+                    try {
+                        listeningSocket.send(confPack);
+                    } catch (IOException e){
+                        e.printStackTrace();
+                    }
                     return;
+                }
                 else
                     inputMessageCash.add(fromUuid);
 
-                byte[] buf = (uuid.toString() + Const.BYE + fromUuid).getBytes();
-                DatagramPacket pack = new DatagramPacket(buf, buf.length, packet.getAddress(), packet.getPort());
-                if(!connectionMap.containsKey(fromUuid)) {
-                    listeningSocket.close();
-                } else {
+                if(connectionMap.containsKey(fromUuid)) {
                     if (getUuid(message).equals(ancUuid)) {
                         String[] parsedMessage = message.split(Const.SEP);
                         if (parsedMessage[2].equals(Integer.toString(selfPort))) { // && parsedMessage[1].equals(InetAddress.getLocalHost().toString())) {
@@ -292,7 +305,7 @@ public class Node extends Thread {
                         } else {
                             ancIP = parsedMessage[1];
                             ancPort = Integer.parseInt(parsedMessage[2]);
-                            connectParent(ancIP, ancPort);
+                            connectParent();
                         }
                     }
                     connectionMap.remove(fromUuid);
@@ -313,6 +326,8 @@ public class Node extends Thread {
                     if(getMessageType(message).equals(Const.BYE)){
                         unconfMessage.confirm(uuid.toString(), getUuid(message));
                     }
+                } catch (SocketTimeoutException e_){
+                    continue;
                 } catch (IOException e){
                     e.printStackTrace();
                 }
@@ -341,6 +356,8 @@ public class Node extends Thread {
 
         private void processPacket (DatagramPacket packet){
             String message = getMessageFromPacket(packet);
+
+            System.out.println("_________GONE");
 
             if (!connectionMap.containsKey(getUuid(message)) && message.length() == Const.ID_LENGTH) {
                 answerToNewDesc(packet);
