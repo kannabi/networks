@@ -101,7 +101,7 @@ public class Node extends Thread {
                 Set<String> uuids = connectionMap.keySet();
                 Iterator<String> iterator = uuids.iterator();
                 Connection futureRoot = connectionMap.get(iterator.next());
-                message = uuid.toString() + Const.SER + Const.SEP + futureRoot.getAddr() + Const.SEP + Integer.toString(futureRoot.getPort());
+                message = uuid.toString() + Const.SER + Const.SEP + futureRoot.getAddr().getHostAddress() + Const.SEP + Integer.toString(futureRoot.getPort());
                 messageQueue.put(new Message(message, uuids));
             } else {
                 message = uuid.toString() + Const.SER + Const.SEP + ancIP + Const.SEP + Integer.toString(ancPort);
@@ -348,6 +348,7 @@ public class Node extends Thread {
                 byte[] ansBuf = ans.getBytes();
                 DatagramPacket ansPack = new DatagramPacket(ansBuf, ansBuf.length, connection.getAddr(), connection.getPort());
 
+                System.out.println("answer to new child: " + getMessageFromPacket(ansPack));
                 listeningSocket.send(ansPack);
             } catch (IOException e){
                 e.printStackTrace();
