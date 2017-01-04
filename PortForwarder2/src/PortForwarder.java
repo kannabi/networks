@@ -9,6 +9,8 @@ import java.nio.channels.SocketChannel;
 /**
  * Created by kannabi on 23.12.16.
  */
+
+
 public class PortForwarder {
 
     private final int MAX_CONNECTIONS = 64;
@@ -145,6 +147,11 @@ public class PortForwarder {
             int written = fromChannel.write(writeBuffer);
             System.out.println("write " + ((InetSocketAddress) fromChannel.getLocalAddress()).getPort() + " " + written);
             writeBuffer.compact();
+
+            if (writeBuffer.hasRemaining()) {
+                toKey.interestOps(toKey.interestOps() | SelectionKey.OP_READ);
+            }
+
             if (writeBuffer.position() == 0) {
                 key.interestOps(key.interestOps() & ~SelectionKey.OP_WRITE);
                 if (toInfo.isInputShut()) {
@@ -183,7 +190,7 @@ public class PortForwarder {
         try {
             int read = fromChannel.read(readBuffer);
             System.out.println("read " + ((InetSocketAddress) fromChannel.getLocalAddress()).getPort() + " " + read);
-            if (read == -1) {
+            if (read == NO_DATA) {
                 key.interestOps(key.interestOps() & ~SelectionKey.OP_READ);
                 fromChannel.shutdownInput();
                 fromInfo.setInputShutted();
