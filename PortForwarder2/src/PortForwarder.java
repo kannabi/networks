@@ -1,4 +1,5 @@
 import java.io.IOException;
+import java.net.ConnectException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.channels.SelectionKey;
@@ -54,12 +55,14 @@ public class PortForwarder {
                 selector.selectedKeys().clear();
             }
 
+        } catch (ReachedException e){
+            return;
         } catch (IOException ie) {
             ie.printStackTrace();
         }
     }
 
-    private void processKey(SelectionKey key){
+    private void processKey(SelectionKey key) throws ReachedException{
         if (!key.isValid()) {
             return;
         }
@@ -84,11 +87,11 @@ public class PortForwarder {
         try {
             SocketChannel clientChannel = listener.accept();
             if (clientChannel == null){
-                System.out.println("Cannot accept connection");
+                System.out.println("CANNOT ACCEPT CONNECTION");
                 return;
             }
 
-            System.out.println("accept " + ((InetSocketAddress) clientChannel.getLocalAddress()).getPort() + " ");
+            System.out.println("ACCEPT " + ((InetSocketAddress) clientChannel.getLocalAddress()).getPort() + " ");
             clientChannel.configureBlocking(false);
 
             if (!serverAddress.isUnresolved()) {
@@ -111,7 +114,7 @@ public class PortForwarder {
         }
     }
 
-    private void completeConnection(SelectionKey key){
+    private void completeConnection(SelectionKey key) throws ReachedException{
         SocketChannel fromChannel = (SocketChannel) key.channel();
         ForwarderInfo fromInfo = (ForwarderInfo) key.attachment();
         SelectionKey toKey = fromInfo.getKey();
@@ -119,9 +122,12 @@ public class PortForwarder {
 
         try {
             fromChannel.finishConnect();
-            System.out.println("connect " + ((InetSocketAddress) fromChannel.getLocalAddress()).getPort() + " ");
+            System.out.println("CONNECTION ESTABLISHED " + ((InetSocketAddress) fromChannel.getLocalAddress()).getPort() + " ");
             key.interestOps((key.interestOps() & ~SelectionKey.OP_CONNECT) | SelectionKey.OP_READ);
-        } catch (IOException e) {
+        } catch (ConnectException e_){
+            throw new ReachedException(e_);
+        }
+        catch (IOException e) {
             e.printStackTrace();
             try {
                 fromChannel.close();
@@ -145,7 +151,7 @@ public class PortForwarder {
         try {
             writeBuffer.flip();
             int written = fromChannel.write(writeBuffer);
-            System.out.println("write " + ((InetSocketAddress) fromChannel.getLocalAddress()).getPort() + " " + written);
+            System.out.println("WRITTEN FROM BUFFER TO" + ((InetSocketAddress) fromChannel.getLocalAddress()).getPort() + " " + written);
             writeBuffer.compact();
 
             if (writeBuffer.hasRemaining()) {
@@ -189,7 +195,7 @@ public class PortForwarder {
 
         try {
             int read = fromChannel.read(readBuffer);
-            System.out.println("read " + ((InetSocketAddress) fromChannel.getLocalAddress()).getPort() + " " + read);
+            System.out.println("READ TO BUFFER FROM " + ((InetSocketAddress) fromChannel.getLocalAddress()).getPort() + " " + read);
             if (read == NO_DATA) {
                 key.interestOps(key.interestOps() & ~SelectionKey.OP_READ);
                 fromChannel.shutdownInput();
@@ -220,4 +226,14 @@ public class PortForwarder {
             fromInfo.setOutputShutted();
         }
     }
+
+    private class ReachedException extends Exception{
+        ReachedException(ConnectException e){
+            System.out.println("SERVER CANNOT BE REACHED");
+        }
+
+    }
+
 }
+
+
