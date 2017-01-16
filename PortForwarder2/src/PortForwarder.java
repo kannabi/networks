@@ -151,7 +151,7 @@ public class PortForwarder {
         try {
             writeBuffer.flip();
             int written = fromChannel.write(writeBuffer);
-            System.out.println("WRITTEN FROM BUFFER TO" + ((InetSocketAddress) fromChannel.getLocalAddress()).getPort() + " " + written);
+            System.out.println("WRITTEN FROM BUFFER TO " + ((InetSocketAddress) fromChannel.getLocalAddress()).getPort() + " " + written);
             writeBuffer.compact();
 
             if (writeBuffer.hasRemaining()) {
